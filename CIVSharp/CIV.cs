@@ -303,6 +303,20 @@ namespace CIVSharp
                 return value.ToString();
         }
 
+        // Convert an unsigned integer into 5 bytes of 
+        private byte[] IntToBCD5(uint numericvalue, int bytesize=5)
+        {
+            byte[] bcd = new byte[bytesize];
+            for (int byteNo = 0; byteNo < bytesize; ++byteNo)
+                bcd[byteNo] = 0;
+            for (int digit = 0; digit < bytesize * 2; ++digit)
+            {
+                uint hexpart = numericvalue % 10;
+                bcd[digit / 2] |= (byte)(hexpart << ((digit % 2) * 4));
+                numericvalue /= 10;
+            }
+            return bcd;
+        }
 
         // Return list of available radios
         public string[] GetRadioNames()
@@ -431,6 +445,7 @@ namespace CIVSharp
         // Open serial port, and initialize for reception/sending of commands
         public bool OpenSerialPort(string portName, int baudRate = -1)
         {
+            IntToBCD5(433375000, 4);
             // Check CIV config is valid
             if (Config.ControllerAddress == 0x00 || Config.RadioAddress == 0x00 || Config.RadioID == Radio.NULL_RADIO)
             {
@@ -592,7 +607,6 @@ namespace CIVSharp
             localBuffer.AddRange(commandBuffer);
             localBuffer.Add((byte)SpecialByte.SPECIAL_COMMANDEND);
             sp.Write(localBuffer.ToArray(), 0, localBuffer.ToArray().Length);
-
             // Remove pre-amble and command end code
             localBuffer.RemoveRange(0, 2);
             localBuffer.Remove(localBuffer.Last());
@@ -688,6 +702,24 @@ namespace CIVSharp
             byte[] thisResult = resultData;
             resultData = null;
             return thisResult;
+        }
+
+        public void TuneFrequency(double frequency)
+        {
+            uint freqInt;
+            byte[] commandHeader = { (byte)CommandBytes.COMMAND_FREQUENCY_SET };
+            byte[] command;
+            if (Config.RadioID != Radio.IC_735)
+            {
+                freqInt = (uint)(frequency * 1000000);
+                command = commandHeader.Concat(IntToBCD5(freqInt)).ToArray();
+            }
+            else
+            {
+                freqInt = (uint)(frequency * 10000);
+                command = commandHeader.Concat(IntToBCD5(freqInt, 4)).ToArray();
+            }
+            TransmitCommand(command);
         }
 
         // This loop runs inside a dedicated background thread.
